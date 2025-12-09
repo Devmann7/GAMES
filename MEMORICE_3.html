@@ -506,7 +506,8 @@
     function ganar() {
       detenerTimer();
       const msg = document.getElementById("message");
-      msg.textContent = "💧✨ ¡Ganaste! Todas las parejas están bajo control del agua ✨💧";
+      //anterior: msg.textContent = "💧✨ ¡Ganaste! Todas las parejas están bajo control del agua ✨💧";
+      msg.textContent = "🎉 ¡Genial! 🎉 Durante tu tiempo de juego, ahorraste " + tiempo / 2 + " Litros "  ;
       msg.classList.add("win");
     }
 
@@ -526,3 +527,4 @@
   </script>
 </body>
 </html>
+
