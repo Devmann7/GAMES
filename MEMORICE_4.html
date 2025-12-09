@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Juego Memorice TOTEM Agua</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    }
+
+    /* Pantalla negra, contenedor */
+    body {
+    background: #000;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: sans-serif;
+    color: #e9faff;
+    position: relative;      /* para posicionar #totem absoluto dentro */
+    }
+
+    /* Lienzo fijo 1080x1920 centrado y escalable */
+    #totem {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1080px;
+    height: 1920px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px 12px;
+    background: url("img/olas.png") 0% 50% / cover no-repeat;
+    animation: moverOlasFondo 25s linear infinite;
+    overflow: hidden;
+    transform: translate(-50%, -50%);   /* se completará con scale() en JS */
+    transform-origin: center center;
+    }
+
+
+    @keyframes moverOlasFondo {
+      0%   { background-position:   0% 100%; }
+      50%  { background-position:  50% 100%; }
+      100% { background-position: 100% 100%; }
+    }
+
+    h1 {
+      margin: 0 0 12px 0;
+      text-align: center;
+      font-size: 32px;
+      letter-spacing: 2px;
+      color: #e9faff;
+      text-shadow: 0 0 12px rgba(0, 200, 255, 0.9), 0 0 24px rgba(0, 120, 200, 0.9);
+      animation: flotarTitulo 4s ease-in-out infinite;
+    }
+
+    @keyframes flotarTitulo {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+      100% { transform: translateY(0); }
+    }
+
+    #topBar {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 14px;
+      font-size: 20px;
+      gap: 2px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(9, 39, 74, 0.72);
+      box-shadow: 0 0 18px rgba(0, 180, 255, 0.55);
+      border: 1px solid rgba(160, 225, 255, 0.7);
+      backdrop-filter: blur(10px);
+      animation: balanceoBarra 7s ease-in-out infinite;
+    }
+
+    @keyframes balanceoBarra {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(6px); }
+      100% { transform: translateX(0); }
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: auto;
+    }
+
+    .stat-label {
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #c0eaff;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: bold;
+      color: #ffffff;
+      text-shadow: 0 0 6px rgba(0, 200, 255, 0.9);
+      animation: pulsoLuz 2.5s ease-in-out infinite;
+    }
+
+    @keyframes pulsoLuz {
+      0% { text-shadow: 0 0 2px rgba(0, 200, 255, 0.7); }
+      50% { text-shadow: 0 0 12px rgba(0, 255, 255, 1); }
+      100% { text-shadow: 0 0 2px rgba(0, 200, 255, 0.7); }
+    }
+
+    #message {
+        margin: 20px 0 12px 0;
+        font-size: 46px;
+        line-height: 1.3;
+        text-align: center;
+        min-height: 100px;
+        font-weight: bold;
+        padding: 0 40px;
+    }
+
+      @keyframes winZoomFade {
+        0% { opacity: 0; transform: scale(0.6); }
+        60% { opacity: 1; transform: scale(1.05); }
+        100% {opacity: 1; transform: scale(1); }
+    }
+
+    #message.win {
+        color: #fff8c9;
+        text-shadow: 0 0 18px rgba(255, 255, 180, 1),
+                    0 0 36px rgba(255, 220, 120, 1);
+        animation: winZoomFade 0.8s ease-out forwards;
+    }
+
+
+
+    @keyframes ganarBrillo {
+      0% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.06); opacity: 1; }
+      100% { transform: scale(1); opacity: 0.9; }
+    }
+
+  
+
+
+    #gameContainer {
+      flex: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    #game {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      width: 95%;
+      max-width: 1000px;
+    }
+
+    .card {
+      perspective: 800px;
+      cursor: pointer;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+    }
+
+    .card-inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.4s;
+    }
+
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid rgba(190, 235, 255, 0.6);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.55);
+    }
+
+    .card-front,
+    .card-back {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at 30% 30%, #2dd4ff 0%, #0a2540 42%, #020818 100%);
+    }
+
+    .card-front img,
+    .card-back img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-back {
+      transform: rotateY(180deg);
+    }
+
+    .card.hidden {
+      visibility: hidden;
+    }
+
+  /* Barra inferior con botón */
+    #bottomBar {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    transition: margin-top 0.3s ease;   /* para que el movimiento sea suave */
+    }
+
+    /* Estado normal del botón */
+    #bottomBar button {
+        padding: 10px 26px;
+        font-size: 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(160, 225, 255, 0.9);
+        cursor: pointer;
+        background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+        color: #012132;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.55);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, 
+                    filter 0.2s ease, font-size 0.2s ease, padding 0.2s ease;
+        }
+
+    /* Estado “ganaste”: botón grande, destacado */
+    #bottomBar.win {
+        margin-top: 40px;           /* lo acerca al mensaje */
+    }
+
+    #bottomBar.win button {
+        font-size: 24px;
+        padding: 16px 40px;
+        transform: scale(1.05);
+    }
+
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.7);
+      filter: brightness(1.08);
+    }
+
+    button:active {
+      transform: translateY(1px);
+      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.7);
+    }
+
+    @keyframes buttonFade {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+
+  </style>
+</head>
+<body>
+  
+    <div id="totem">
+      <h1>Memorice del Agua</h1>
+
+      <div id="topBar">
+        <div class="stat">
+          <span class="stat-label">Tiempo</span>
+          <span class="stat-value" id="timerValue">00:00</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Intentos</span>
+          <span class="stat-value" id="attemptsValue">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Puntos</span>
+          <span class="stat-value">
+            <span id="scoreValue">0</span> / <span id="totalPairs">6</span>
+          </span>
+        </div>
+      </div>
+
+      <div id="message"></div>
+
+      <div id="gameContainer">
+        <div id="game"></div>
+      </div>
+
+      <div id="bottomBar">
+        <button onclick="reiniciarJuego()">Reiniciar juego</button>
+      </div>
+    </div>
+
+
+  <script>
+    const FRONT_IMAGE = "img/dorso.png";
+
+    const imagenesBase = [
+      "img/img1.png",
+      "img/img2.png",
+      "img/img3.png",
+      "img/img4.png",
+      "img/img5.png",
+      "img/img6.png"
+    ];
+
+    const TOTAL_PARES = imagenesBase.length;
+
+    let cartas = [];
+    let primeraCarta = null;
+    let segundaCarta = null;
+    let bloqueo = false;
+    let puntos = 0;
+    let intentos = 0;
+    let tiempo = 0;
+    let timerInterval = null;
+
+    function crearCartas() {
+      const contenedor = document.getElementById("game");
+      contenedor.innerHTML = "";
+      cartas = [];
+      primeraCarta = null;
+      segundaCarta = null;
+      bloqueo = false;
+
+      document.getElementById("totalPairs").textContent = TOTAL_PARES;
+
+      const imagenesParaJuego = [...imagenesBase, ...imagenesBase];
+
+      for (let i = imagenesParaJuego.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [imagenesParaJuego[i], imagenesParaJuego[j]] = [imagenesParaJuego[j], imagenesParaJuego[i]];
+      }
+
+      imagenesParaJuego.forEach((src) => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.dataset.imagen = src;
+
+        const cardInner = document.createElement("div");
+        cardInner.classList.add("card-inner");
+
+        const front = document.createElement("div");
+        front.classList.add("card-face", "card-front");
+        const frontImg = document.createElement("img");
+        frontImg.src = FRONT_IMAGE;
+        frontImg.alt = "Dorso";
+        front.appendChild(frontImg);
+
+        const back = document.createElement("div");
+        back.classList.add("card-face", "card-back");
+        const backImg = document.createElement("img");
+        backImg.src = src;
+        backImg.alt = "Carta";
+        back.appendChild(backImg);
+
+        cardInner.appendChild(front);
+        cardInner.appendChild(back);
+        card.appendChild(cardInner);
+
+        card.addEventListener("click", () => manejarClickCarta(card));
+
+        contenedor.appendChild(card);
+        cartas.push(card);
+      });
+    }
+
+    function manejarClickCarta(card) {
+      if (bloqueo) return;
+      if (card.classList.contains("flipped")) return;
+
+      card.classList.add("flipped");
+
+      if (!primeraCarta) {
+        primeraCarta = card;
+      } else if (!segundaCarta && card !== primeraCarta) {
+        segundaCarta = card;
+        intentos++;
+        actualizarIntentos();
+        compararCartas();
+      }
+    }
+
+    function compararCartas() {
+      const img1 = primeraCarta.dataset.imagen;
+      const img2 = segundaCarta.dataset.imagen;
+
+      if (img1 === img2) {
+        puntos++;
+        actualizarPuntaje();
+
+        setTimeout(() => {
+          primeraCarta.classList.add("hidden");
+          segundaCarta.classList.add("hidden");
+          resetSeleccion();
+
+          if (puntos === TOTAL_PARES) {
+            ganar();
+          }
+        }, 400);
+      } else {
+        bloqueo = true;
+        setTimeout(() => {
+          primeraCarta.classList.remove("flipped");
+          segundaCarta.classList.remove("flipped");
+          resetSeleccion();
+          bloqueo = false;
+        }, 800);
+      }
+    }
+
+    function resetSeleccion() {
+      primeraCarta = null;
+      segundaCarta = null;
+    }
+
+    function actualizarPuntaje() {
+      document.getElementById("scoreValue").textContent = puntos;
+    }
+
+    function actualizarIntentos() {
+      document.getElementById("attemptsValue").textContent = intentos;
+    }
+
+    function actualizarTimer() {
+      const mins = Math.floor(tiempo / 60);
+      const secs = tiempo % 60;
+      const mm = String(mins).padStart(2, "0");
+      const ss = String(secs).padStart(2, "0");
+      document.getElementById("timerValue").textContent = `${mm}:${ss}`;
+    }
+
+    function iniciarTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      tiempo = 0;
+      actualizarTimer();
+      timerInterval = setInterval(() => {
+        tiempo++;
+        actualizarTimer();
+      }, 1000);
+    }
+
+    function detenerTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    function ganar() {
+        detenerTimer();
+
+        const msg = document.getElementById("message");
+        msg.innerHTML =
+            "🎉 ¡Genial! 🎉<br>Durante tu tiempo de juego, ahorraste <strong>" +
+            (tiempo / 2) +
+            " Litros</strong>";
+        msg.classList.add("win");
+
+        // Ocultar el tablero para que el botón suba
+        const gameContainer = document.getElementById("gameContainer");
+        gameContainer.style.display = "none";
+
+        // Agrandar y subir el botón
+        const bottomBar = document.getElementById("bottomBar");
+        bottomBar.classList.add("win");
+    }
+
+
+
+
+    function reiniciarJuego() {
+        puntos = 0;
+        intentos = 0;
+        actualizarPuntaje();
+        actualizarIntentos();
+
+        const msg = document.getElementById("message");
+        msg.textContent = "";
+        msg.classList.remove("win");
+
+        // Volver a mostrar el tablero y el botón normal
+        document.getElementById("gameContainer").style.display = "flex";
+        document.getElementById("bottomBar").classList.remove("win");
+
+        crearCartas();
+        iniciarTimer();
+    }
+
+
+    /* Escalar el lienzo 1080x1920 para que quepa completo en la ventana */
+    function ajustarEscala() {
+        const baseW = 1080;
+        const baseH = 1920;
+        const scale = Math.min(window.innerWidth / baseW, window.innerHeight / baseH);
+
+        const totem = document.getElementById("totem");
+        // Primero el translate para centrar, luego el scale
+        totem.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+
+
+    window.addEventListener("resize", ajustarEscala);
+
+    window.addEventListener("load", () => {
+      reiniciarJuego();
+      ajustarEscala();
+    });
+  </script>
+</body>
+</html>
