@@ -39,19 +39,24 @@
     align-items: center;
     justify-content: flex-start;
     padding: 24px 12px;
-    background: url("img/olas.png") 0% 50% / cover no-repeat;
-    animation: moverOlasFondo 25s linear infinite;
+    background: #000;
     overflow: hidden;
     transform: translate(-50%, -50%);   /* se completará con scale() en JS */
     transform-origin: center center;
     }
 
-
-    @keyframes moverOlasFondo {
-      0%   { background-position:   0% 100%; }
-      50%  { background-position:  50% 100%; }
-      100% { background-position: 100% 100%; }
+    /* Video de fondo a pantalla completa dentro del tótem */
+    #bg-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;         /* recorta sin deformar */
+      z-index: -1;               /* detrás de todo el contenido */
+      pointer-events: none;      /* no bloquea los clics del juego */
     }
+    
 
     h1 {
       margin: 0 0 12px 0;
@@ -145,16 +150,11 @@
         animation: winZoomFade 0.8s ease-out forwards;
     }
 
-
-
     @keyframes ganarBrillo {
       0% { transform: scale(1); opacity: 0.4; }
       50% { transform: scale(1.06); opacity: 1; }
       100% { transform: scale(1); opacity: 0.9; }
     }
-
-  
-
 
     #gameContainer {
       flex: 0;
@@ -287,6 +287,9 @@
 <body>
   
     <div id="totem">
+      <video id="bg-video" autoplay muted loop playsinline>
+        <source src="img/BACK_B.mp4" type="video/mp4">
+      </video>
       <h1>Memorice del Agua</h1>
 
       <div id="topBar">
