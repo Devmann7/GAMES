@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Juego Rompecabezas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Fondo general */
+  body {
+    font-family: Arial, sans-serif;
+    background: #000;
+    overflow: hidden; /* sin scroll, todo debe entrar escalado */
+  }
+
+  h1 {
+      margin: 12px 0;
+      text-align: center;
+      font-size: 42px;
+      letter-spacing: 2px;
+      color: #e9faff;
+      text-shadow: 0 0 12px rgba(0, 200, 255, 0.9), 0 0 24px rgba(0, 120, 200, 0.9);
+      animation: flotarTitulo 4s ease-in-out infinite;
+    }
+
+  /* Ocupa toda la pantalla, solo contenedor */
+  #totem-wrapper {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Diseño base 1080x1920 que se escala y centra */
+ #totem-inner {
+  position: absolute;
+  width: 1080px;
+  height: 1920px;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  background: #000;          /* color de respaldo si el video no carga */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  overflow: hidden;          /* para que el video no se salga */
+}
+
+/* Video de fondo a pantalla completa dentro del tótem */
+#bg-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;         /* recorta sin deformar */
+  z-index: -1;               /* detrás de todo el contenido */
+  pointer-events: none;      /* no bloquea los clics del juego */
+}
+
+
+
+
+  #logo2 { 
+    width: 50%; 
+    max-width: 650px; 
+    margin-top: 140px; 
+    margin-bottom: 20px; 
+  }
+
+  #logo2.small {
+    max-width: 150px;
+    transition: all 0.5s ease;
+  }
+
+  #puzzle-container {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    background: white;
+    width: 320px;
+    max-width: 90vw;
+    transition: all 0.5s ease;
+  }
+
+  #puzzle {
+    width: 600px;
+    height: 600px;
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    grid-template-rows: repeat(3,1fr);
+    border:2px solid #fe5100;
+    box-shadow:0 6px 18px #fe5100;
+    margin-top:20px;
+  }
+
+  #form-container, #image-container, #puzzle-container {
+    background: white;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    width: 80%;
+    max-width: 600px;
+    margin-top: 20px;
+  }
+
+  @keyframes pulseGlow { 
+    0% { transform: scale(1); box-shadow: 0 0 15px rgba(245, 98, 0, 0.6);} 
+    50% { transform: scale(1.2); box-shadow:0 0 30px rgba(175, 120, 76, 0.9);} 
+    100% { transform: scale(1); box-shadow:0 0 15px rgba(76,175,80,0.6);} 
+  }
+
+  input {
+    width: 90%;
+    padding: 10px;
+    margin: 8px 0;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+  }
+
+  button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    cursor: pointer;
+    color: white;
+    background: #fe5100;
+    transition: background 0.3s;
+    zoom: 1.5;
+  }
+
+  #start-btn {
+    margin-top: 15px;
+    animation: pulseGlow 1.5s infinite;
+    zoom: 2.0;
+  }
+
+  .images {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    justify-items: center;
+    zoom: 2.5;
+  }
+
+  .images img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: border 0.2s;
+  }
+
+  .images img.selected { border: 3px solid #fe5100; }
+
+  .tile {
+    box-sizing:border-box;
+    border-right:1px solid rgba(255,255,255,.08);
+    border-bottom:1px solid rgba(0,0,0,.08);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:18px;
+    background-size:300% 300%;
+  }
+
+  .empty{ 
+    background:none; 
+    cursor:default; 
+  }
+
+  .controls{ 
+    display:flex; 
+    gap:8px; 
+    justify-content:center; 
+    margin-top:10px; 
+  }
+
+  #keyboard button { 
+    margin: 3px; 
+    padding: 12px 12px; 
+    border-radius: 8px; 
+    border: none; 
+    background: #fe5100; 
+    cursor: pointer; 
+    color: #fff;
+    zoom: 1.5;
+  }
+
+  #keyboard { 
+    margin-top: 10px; 
+    max-width: 550px; 
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #popup {
+    display:none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background: #fe5100;
+    color: white;
+    padding: 30px 50px;
+    border-radius: 20px;
+    font-size: 1.5rem;
+    text-align: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    transition: transform 0.5s ease, opacity 0.5s ease;
+    opacity: 0;
+    z-index: 9999;
+  }
+</style>
+</head>
+<body>
+
+<div id="totem-wrapper">
+  <div id="totem-inner">
+    <video id="bg-video" autoplay muted loop playsinline>
+        <source src="puzzle/BACK_B.mp4" type="video/mp4">
+    </video>
+
+    <h1>Puzzle del Agua</h1>
+
+    <img src="puzzle/dorso.png" alt="LOGO2" id="logo2">
+    <button id="start-btn" onclick="showImages()">▶️ Iniciar Juego</button>
+
+    <!-- FORMULARIO -->
+    <div id="form-container" style="display:none;">
+      <h3>Ingresa tus datos</h3>
+      <input type="text" id="name" placeholder="Nombre" onclick="focusInput('name')">
+      <input type="email" id="email" placeholder="Correo" onclick="focusInput('email')">
+      <div id="keyboard"></div>
+      <button onclick="showImages()">Continuar</button>
+    </div>
+
+    <!-- SELECCIÓN DE IMAGEN -->
+    <div id="image-container" style="display:none;">
+      <h3>Elige una imagen para el rompecabezas</h3>
+      <div class="images">
+        <img src="puzzle/IMG1.jpg" onclick="selectImage(this)">
+        <img src="puzzle/IMG2.jpg" onclick="selectImage(this)">
+        <img src="puzzle/IMG3.jpg" onclick="selectImage(this)">
+        <img src="puzzle/IMG4.jpg" onclick="selectImage(this)">
+      </div>
+      <button onclick="startPuzzle()">Jugar</button>
+    </div>
+
+    <!-- ROMPECABEZAS -->
+    <div id="puzzle-container" style="display:none;">
+      <h3>Arma la imagen</h3>
+      <div id="puzzle"></div>
+      <br>
+      <div class="controls">
+        <button id="shuffle">Mezclar</button>
+        <button id="reset">Reiniciar</button>
+        <button id="back">Volver</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="popup">
+  ¡Felicidades! <br> Rompecabezas completado 🎉
+</div>
+
+<script>
+let selectedImage = null;
+let activeInput = null;
+let steps = 0;
+
+/* Escalado 9:16 para que SIEMPRE quepa entero y quede centrado */
+function resizeTotem() {
+  const baseWidth = 1080;
+  const baseHeight = 1920;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const scale = Math.min(vw / baseWidth, vh / baseHeight);
+
+  const inner = document.getElementById('totem-inner');
+  inner.style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+
+window.addEventListener('load', resizeTotem);
+window.addEventListener('resize', resizeTotem);
+
+function showForm(){
+  document.getElementById("start-btn").style.display = "none";
+  document.getElementById("form-container").style.display = "block";
+  createKeyboard();
+  activeInput = document.getElementById("name");
+}
+
+function createKeyboard() {
+  const keyboardDiv = document.getElementById("keyboard");
+  keyboardDiv.innerHTML = "";
+  const rows = ["1234567890","QWERTYUIOP","ASDFGHJKLÑ","@ZXCVBNM"];
+  rows.forEach(r=>{
+    r.split("").forEach(k=>addKey(k));
+    keyboardDiv.appendChild(document.createElement("br"));
+  });
+  [".","-","_"].forEach(k=>addKey(k));
+  const spaceBtn = document.createElement("button");
+  spaceBtn.textContent = "⎵";
+  spaceBtn.style.width = "150px";
+  spaceBtn.onclick = ()=>{ if(activeInput) activeInput.value += " "; };
+  keyboardDiv.appendChild(spaceBtn);
+  const backBtn = document.createElement("button");
+  backBtn.textContent = "⌫";
+  backBtn.onclick = ()=>{ if(activeInput) activeInput.value = activeInput.value.slice(0,-1); };
+  keyboardDiv.appendChild(backBtn);
+}
+
+function addKey(k){
+  const btn = document.createElement("button");
+  btn.textContent = k;
+  btn.onclick = ()=>{ if(activeInput) activeInput.value += k; };
+  document.getElementById("keyboard").appendChild(btn);
+}
+
+function focusInput(id){ activeInput = document.getElementById(id); }
+
+function showImages(){
+  document.getElementById("start-btn").style.display = "none";
+  document.getElementById("form-container").style.display = "none";
+  document.getElementById("image-container").style.display = "block";
+}
+
+function isValidEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+}
+
+function selectImage(img){
+  document.querySelectorAll(".images img").forEach(i => i.classList.remove("selected"));
+  img.classList.add("selected");
+  selectedImage = img.src;
+}
+
+const N = 3;
+let state = [];
+const puzzle = document.getElementById('puzzle');
+
+function createTiles() {
+  puzzle.innerHTML = '';
+  for(let i=0;i<N*N;i++){
+    const tile = document.createElement('button');
+    tile.className='tile';
+    tile.setAttribute('data-pos',i);
+    tile.style.width='100%';
+    tile.style.height='100%';
+    puzzle.appendChild(tile);
+  }
+}
+
+function setBackgroundPositions() {
+  const tiles = Array.from(puzzle.children);
+  for(let i=0;i<tiles.length;i++){
+    const val = state[i];
+    const el = tiles[i];
+    if(val===0){
+      el.classList.add('empty');
+      el.textContent='';
+      el.style.backgroundImage='';
+    } else{
+      el.classList.remove('empty');
+      el.textContent='';
+      const idx = val-1;
+      const row = Math.floor(idx/N);
+      const col = idx%N;
+      el.style.backgroundImage=`url(${selectedImage})`;
+      el.style.backgroundPosition = `${(col/(N-1))*100}% ${(row/(N-1))*100}%`;
+      el.style.backgroundSize = `${N*100}% ${N*100}%`;
+    }
+  }
+}
+
+function defaultState() {
+  state=[];
+  for(let i=1;i<=N*N-1;i++) state.push(i);
+  state.push(0);
+}
+
+function canMove(index){
+  const zero=state.indexOf(0);
+  const r1=Math.floor(index/N), c1=index%N;
+  const r0=Math.floor(zero/N), c0=zero%N;
+  return Math.abs(r1-r0)+Math.abs(c1-c0)===1;
+}
+
+function moveTile(index){
+  if(!canMove(index)) return false;
+
+  const zero = state.indexOf(0);
+  [state[zero],state[index]] = [state[index],state[zero]];
+  steps++;
+  setBackgroundPositions();
+
+  if(isSolved()) {
+    showPopup(`¡Felicidades! <br> Completaste el rompecabezas en ${steps} pasos 🎉`);
+  }
+
+  return true;
+}
+
+function isSolved(){
+  for(let i=0;i<state.length-1;i++){
+    if(state[i] !== i+1) return false;
+  }
+  return true;
+}
+
+function shuffle(moves=200){
+  for(let i=0;i<moves;i++){
+    const zero=state.indexOf(0);
+    const neighbors=[];
+    const r=Math.floor(zero/N), c=zero%N;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+      if(rr>=0&&rr<N&&cc>=0&&cc<N) neighbors.push(rr*N+cc);
+    });
+    const choice=neighbors[Math.floor(Math.random()*neighbors.length)];
+    [state[zero],state[choice]]=[state[choice],state[zero]];
+  }
+  setBackgroundPositions();
+}
+
+puzzle.addEventListener('click', e=>{
+  const btn=e.target.closest('.tile');
+  if(!btn) return;
+  const idx=Array.from(puzzle.children).indexOf(btn);
+  moveTile(idx);
+});
+
+document.getElementById('shuffle').addEventListener('click', ()=>shuffle(200));
+document.getElementById('reset').addEventListener('click', ()=>{
+  defaultState();
+  setBackgroundPositions();
+  steps = 0;
+});
+document.getElementById('back').addEventListener('click', ()=>{
+  document.getElementById("puzzle-container").style.display = "none";
+  document.getElementById("start-btn").style.display = "block";
+  document.getElementById("logo2").classList.remove("small");
+  document.getElementById("name").value = "";
+  document.getElementById("email").value = "";
+  selectedImage = null;
+  document.getElementById("image-container").style.display = "none";
+});
+
+function startPuzzle(){
+  if(!selectedImage){ 
+    alert("Selecciona una imagen primero."); 
+    return; 
+  }
+
+  document.getElementById("image-container").style.display = "none";
+  document.getElementById("puzzle-container").style.display = "block";
+  document.getElementById("logo2").classList.add("small");
+
+  createTiles();
+  defaultState();
+  setBackgroundPositions();
+  steps = 0;
+}
+
+function showPopup(message){
+  const popup = document.getElementById('popup');
+  popup.innerHTML = message;
+  popup.style.display = 'block';
+  setTimeout(()=>{
+    popup.style.transform = 'translate(-50%, -50%) scale(1)';
+    popup.style.opacity = '1';
+  }, 50);
+
+  setTimeout(()=>hidePopup(), 8000);
+}
+
+function hidePopup(){
+  const popup = document.getElementById('popup');
+  popup.style.transform = 'translate(-50%, -50%) scale(0)';
+  popup.style.opacity = '0';
+  setTimeout(()=>{ popup.style.display = 'none'; }, 50);
+}
+</script>
+
+</body>
+</html>
