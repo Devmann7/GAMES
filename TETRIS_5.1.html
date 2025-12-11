@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tetris OAK Webcam v5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      color: white;
+      background: #000;
+    }
+
+    /* VIDEO DE FONDO (video.mp4) */
+    #bg-video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
+
+    #bg-overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 20% 20%, rgba(0,0,0,0.3), rgba(0,0,0,0.8));
+      z-index: 0;
+    }
+
+    /* CONTENEDOR CENTRAL 9:16 */
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #game-container {
+      height: 100vh;
+      aspect-ratio: 9 / 16;     /* relación 9:16 fija */
+      max-height: 100vh;
+      position: relative;
+    }
+
+    #game-wrapper {
+      width: 100%;
+      height: 100%;
+      padding: 16px;
+      border-radius: 16px;
+      border: 3px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(4px);
+      overflow: hidden;
+    }
+
+    /* LAYOUT INTERNO DEL JUEGO */
+    #layout {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      flex-direction: row;
+    }
+
+    /*************** COLUMNA IZQUIERDA (OCULTA) ****************/
+    #left-panel {
+      display: none; /* ocultamos */
+    }
+
+    #webcam {
+      display: none; /* solo fuente para el canvas */
+    }
+
+    /*************** COLUMNA DERECHA: JUEGO ****************/
+    #game-wrapper-inner {
+      flex: 1;
+      height: 100%;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    #header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+
+    #header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 3px;
+    }
+
+    #subtitle {
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+
+    #score-box { text-align: right; }
+    #score-label { font-size: 0.8rem; opacity: 0.7; }
+    #score { font-size: 1.5rem; font-weight: bold; }
+
+    #tetris {
+      border: 3px solid #444;
+      background: #111;
+      margin-top: 10px;
+      box-shadow: 0 0 16px rgba(0,0,0,0.8);
+    }
+
+    /********** Controles touch **********/
+    #controls {
+      margin-top: 16px;
+      width: 340px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    #controls button {
+      font-size: 1.6rem;
+      border: none;
+      background: #333;
+      color: white;
+      height: 60px;
+      border-radius: 12px;
+    }
+
+    #motion-canvas { display: none; }
+  </style>
+</head>
+
+<body>
+ 
+  <div id="bg-overlay"></div>
+
+  <!-- CONTENEDOR 9:16 -->
+  <div id="game-container">
+    <div id="game-wrapper">
+      <div id="layout">
+
+        <!-- FONDO DE PÁGINA CON MP4 -->
+        <video id="bg-video" autoplay muted loop playsinline>
+            <source src="vid/BACK_G.mp4" type="video/mp4" />
+        </video>
+
+        <!-- COLUMNA IZQUIERDA (oculta, se deja para fuente de cámara) -->
+        <div id="left-panel">
+          <div id="left-title">Cámara</div>
+          <video id="webcam" autoplay playsinline muted></video>
+          <div id="cam-status">Inicializando cámara...</div>
+        </div>
+
+        <!-- COLUMNA DERECHA: JUEGO -->
+        <div id="game-wrapper-inner">
+          <div id="header">
+            <div>
+              <h1>TETRIS</h1>
+              <div id="subtitle">Presiona los botones para jugar</div>
+            </div>
+            <div id="score-box">
+              <div id="score-label">Puntos</div>
+              <div id="score">0</div>
+            </div>
+          </div>
+
+          <canvas id="tetris"></canvas>
+
+          <div id="controls">
+            <button data-action="left">◀</button>
+            <button data-action="rotate">⟳</button>
+            <button data-action="right">▶</button>
+            <button data-action="down">▼</button>
+            <button data-action="drop">⤓</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <canvas id="motion-canvas"></canvas>
+
+  <script>
+/*******************************************************************
+ * TETRIS
+ *******************************************************************/
+const COLS = 10;
+const ROWS = 20;
+
+const canvas = document.getElementById("tetris");
+const ctx = canvas.getContext("2d");
+
+const usableHeight = window.innerHeight * 0.75;
+const BLOCK = Math.floor(usableHeight / ROWS);
+canvas.height = ROWS * BLOCK;
+canvas.width = COLS * BLOCK;
+
+const colors = [
+  null,
+  "#FF0D72", "#0DC2FF", "#0DFF72",
+  "#F538FF", "#FF8E0D", "#FFE138", "#3877FF"
+];
+
+const SHAPES = {
+  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  J: [[2,0,0],[2,2,2],[0,0,0]],
+  L: [[0,0,3],[3,3,3],[0,0,0]],
+  O: [[4,4],[4,4]],
+  S: [[0,5,5],[5,5,0],[0,0,0]],
+  T: [[0,6,0],[6,6,6],[0,0,0]],
+  Z: [[7,7,0],[0,7,7],[0,0,0]]
+};
+
+function createBoard() {
+  return Array.from({length: ROWS}, () => Array(COLS).fill(0));
+}
+let board = createBoard();
+
+function randomPiece() {
+  const t = Object.keys(SHAPES);
+  const type = t[Math.floor(Math.random()*t.length)];
+  const matrix = SHAPES[type];
+  return {
+    matrix,
+    pos: { x: Math.floor(COLS/2)-1, y: 0 }
+  };
+}
+
+let piece = randomPiece();
+let score = 0;
+let lastTime = 0;
+let dropCounter = 0;
+let dropInterval = 700;
+
+function collide() {
+  const m = piece.matrix, o = piece.pos;
+  for (let y=0;y<m.length;y++){
+    for (let x=0;x<m[y].length;x++){
+      if (m[y][x] !== 0) {
+        const nx = x+o.x;
+        const ny = y+o.y;
+        if (ny >= ROWS || nx < 0 || nx >= COLS || (ny>=0 && board[ny][nx] !== 0)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function merge() {
+  const m=piece.matrix, o=piece.pos;
+  for (let y=0;y<m.length;y++){
+    for (let x=0;x<m[y].length;x++){
+      if (m[y][x]!==0 && y+o.y>=0){ board[y+o.y][x+o.x]=m[y][x]; }
+    }
+  }
+}
+
+function sweep() {
+  outer: for (let y=ROWS-1;y>=0;y--){
+    for (let x=0;x<COLS;x++){
+      if (board[y][x]===0) continue outer;
+    }
+    board.splice(y,1);
+    board.unshift(Array(COLS).fill(0));
+    score += 100;
+    y++;
+  }
+}
+
+function moveHorizontal(dir) {
+  piece.pos.x += dir;
+  if (collide()) piece.pos.x -= dir;
+}
+
+function softDrop() {
+  piece.pos.y++;
+  if (collide()) {
+    piece.pos.y--;
+    fixPiece();
+  }
+}
+
+function hardDrop() {
+  while(!collide()) piece.pos.y++;
+  piece.pos.y--;
+  fixPiece();
+}
+
+function fixPiece() {
+  merge();
+  sweep();
+  updateScore();
+  piece = randomPiece();
+  if (collide()) {
+    board = createBoard();
+    score = 0;
+    dropInterval = 700;
+    updateScore();
+  }
+}
+
+function rotateMatrix(matrix, dir) {
+  const transposed = matrix[0].map((_,i)=> matrix.map(row=>row[i]));
+  return dir>0 ? transposed.map(r=>r.reverse()) : transposed.reverse();
+}
+
+function rotatePiece() {
+  const old = piece.matrix;
+  piece.matrix = rotateMatrix(piece.matrix,1);
+  if (collide()) {
+    piece.pos.x++;
+    if (collide()) {
+      piece.pos.x -=2;
+      if (collide()) {
+        piece.pos.x++;
+        piece.matrix = old;
+      }
+    }
+  }
+}
+
+function drawBlock(x,y,v){
+  if(!v)return;
+  ctx.fillStyle = colors[v];
+  ctx.fillRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+  ctx.strokeStyle="#111";
+  ctx.strokeRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+}
+
+/*********** REFERENCIA AL VIDEO PARA FONDO DEL CANVAS ***********/
+const video = document.getElementById("webcam");
+
+function draw() {
+  if (video && video.readyState >= 2) {
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      if(board[y][x]!==0) drawBlock(x,y,board[y][x]);
+    }
+  }
+  piece.matrix.forEach((row,dy)=>{
+    row.forEach((v,dx)=>{
+      if(v!==0) drawBlock(piece.pos.x+dx,piece.pos.y+dy,v);
+    });
+  });
+}
+
+function updateScore(){
+  document.getElementById("score").textContent = score;
+}
+
+function update(t=0){
+  const d = t-lastTime;
+  lastTime = t;
+  dropCounter += d;
+  if(dropCounter > dropInterval){
+    softDrop();
+    dropCounter = 0;
+  }
+  draw();
+  requestAnimationFrame(update);
+}
+
+function handleAction(a){
+  if(a==="left") moveHorizontal(-1);
+  if(a==="right") moveHorizontal(1);
+  if(a==="down") softDrop();
+  if(a==="rotate") rotatePiece();
+  if(a==="drop") hardDrop();
+}
+
+document.querySelectorAll("[data-action]").forEach(btn=>{
+  btn.onclick = ()=> handleAction(btn.dataset.action);
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowLeft") handleAction("left");
+  if(e.key==="ArrowRight") handleAction("right");
+  if(e.key==="ArrowDown") handleAction("down");
+  if(e.key==="ArrowUp" || e.key==="x" || e.key==="X") handleAction("rotate");
+  if(e.key===" ") handleAction("drop");
+});
+
+/*******************************************************************
+ * WEBCAM + GESTOS
+ *******************************************************************/
+const motionCanvas = document.getElementById("motion-canvas");
+const motionCtx = motionCanvas.getContext("2d");
+
+const MOTION_WIDTH = 96;
+const MOTION_HEIGHT = 72;
+motionCanvas.width = MOTION_WIDTH;
+motionCanvas.height = MOTION_HEIGHT;
+
+let prevFrame = null;
+
+let THRESH_SIDE = 9000;
+let THRESH_ROTATE = 20000;
+
+const cooldown = {left:0,right:0,rotate:0};
+function canTrigger(a){
+  const now = performance.now();
+  if(now - cooldown[a] > 300){
+    cooldown[a] = now;
+    return true;
+  }
+  return false;
+}
+
+function analyzeMotion(){
+  if(!video || video.readyState < 2) return;
+
+  motionCtx.save();
+  motionCtx.clearRect(0,0,MOTION_WIDTH,MOTION_HEIGHT);
+  motionCtx.translate(MOTION_WIDTH,0);
+  motionCtx.scale(-1,1);
+  motionCtx.drawImage(video,0,0,MOTION_WIDTH,MOTION_HEIGHT);
+  motionCtx.restore();
+
+  const frame = motionCtx.getImageData(0,0,MOTION_WIDTH,MOTION_HEIGHT);
+  const data = frame.data;
+
+  if(!prevFrame){
+    prevFrame = data.slice();
+    return;
+  }
+
+  const width = MOTION_WIDTH;
+  const height = MOTION_HEIGHT;
+  const thirdH = height / 3;
+
+  let topArea = 0;
+  let bottomLeft = 0;
+  let bottomRight = 0;
+
+  for(let y=0;y<height;y++){
+    for(let x=0;x<width;x++){
+      const i = (y*width + x)*4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      const pr = prevFrame[i], pg = prevFrame[i+1], pb = prevFrame[i+2];
+
+      const diff =
+        Math.abs(r-pr) +
+        Math.abs(g-pg) +
+        Math.abs(b-pb);
+
+      if(diff < 15) continue;
+
+      if(y < thirdH){
+        topArea += diff;
+      } else {
+        if(x < width/2){
+          bottomLeft += diff;
+        } else {
+          bottomRight += diff;
+        }
+      }
+    }
+  }
+
+  prevFrame = data.slice();
+
+  if(topArea > THRESH_ROTATE){
+    if(canTrigger("rotate")) handleAction("rotate");
+    return;
+  }
+
+  if(
+    bottomLeft > THRESH_SIDE &&
+    bottomLeft > bottomRight * 1.2
+  ){
+    if(canTrigger("left")) handleAction("left");
+    return;
+  }
+
+  if(
+    bottomRight > THRESH_SIDE &&
+    bottomRight > bottomLeft * 1.2
+  ){
+    if(canTrigger("right")) handleAction("right");
+    return;
+  }
+}
+
+setInterval(analyzeMotion, 100);
+
+/*
+async function initWebcam(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 },
+      audio: false
+    });
+    video.srcObject = stream;
+    const camStatus = document.getElementById("cam-status");
+    if(camStatus) camStatus.textContent = "Cámara activa ✔ (modo espejo)";
+  } catch(e) {
+    console.error(e);
+    const camStatus = document.getElementById("cam-status");
+    if(camStatus) camStatus.textContent = "Error: no se pudo acceder a la cámara";
+  }
+}
+*/
+/**************** INICIO ****************/
+updateScore();
+update();
+initWebcam();
+  </script>
+</body>
+</html>
