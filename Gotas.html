@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Gotas y Botella - TOTEM 9:16</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+    /* Contenedor centrado + escala para mantener 9:16 fijo (1080x1920) */
+    #stage {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: #000;
+    }
+    #totem {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      transform-origin: center top;
+      background: radial-gradient(circle at 30% 20%, #0b2a55 0%, #06162f 40%, #030a14 100%);
+      overflow: hidden;
+      border: 6px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+    }
+
+    /* Canvas ocupa todo el totem */
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    /* HUD */
+    #hud {
+      position: absolute;
+      top: 22px;
+      left: 22px;
+      right: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      z-index: 5;
+      color: #e9faff;
+      text-shadow: 0 2px 10px rgba(0,0,0,.5);
+      pointer-events: none;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-radius: 999px;
+      background: rgba(0, 40, 70, .35);
+      border: 1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(6px);
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      min-width: 260px;
+      justify-content: center;
+    }
+
+    /* Overlay inicio / game over */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(3px);
+    }
+    #panel {
+      width: min(880px, 92%);
+      padding: 44px;
+      border-radius: 28px;
+      background: rgba(5, 25, 45, .78);
+      border: 1px solid rgba(255,255,255,.14);
+      color: #e9faff;
+      text-align: center;
+      box-shadow: 0 18px 60px rgba(0,0,0,.5);
+    }
+    #panel h1 {
+      font-size: 70px;
+      margin-bottom: 18px;
+      line-height: 1.05;
+    }
+    #panel p {
+      font-size: 30px;
+      opacity: .92;
+      margin-bottom: 26px;
+    }
+    #panel .row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      border-radius: 18px;
+      padding: 18px 26px;
+      font-size: 34px;
+      font-weight: 800;
+      color: #002238;
+      background: linear-gradient(180deg, #9ff3ff 0%, #3ed3ff 100%);
+      box-shadow: 0 10px 30px rgba(0, 160, 255, .25);
+    }
+    button:active { transform: translateY(1px); }
+
+    .small {
+      font-size: 24px;
+      opacity: .9;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="totem">
+      <canvas id="game"></canvas>
+
+      <div id="hud">
+        <div class="pill" id="scorePill">Puntos: <span id="score">0</span></div>
+        <div class="pill" id="livesPill">Vidas: <span id="lives">3</span></div>
+        <div class="pill" id="levelPill">Nivel: <span id="level">1</span></div>
+      </div>
+
+      <div id="overlay">
+        <div id="panel">
+          <h1 id="title">Atrapa las gotas</h1>
+          <p id="subtitle">Mueve la botella hacia los lados para atrapar las gotas.</p>
+          <div class="row">
+            <button id="btnStart">Iniciar</button>
+            <button id="btnRestart" style="display:none;">Reiniciar</button>
+          </div>
+          <div class="small" id="hint">
+            En tótem: desliza el dedo. En PC: mouse o flechas ⬅➡.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * ESCALA 9:16 FIJO
+     ***********************/
+    const totem = document.getElementById("totem");
+    function fitTotem() {
+      const sw = window.innerWidth;
+      const sh = window.innerHeight;
+      const scale = Math.min(sw / 1080, sh / 1920);
+      totem.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener("resize", fitTotem, { passive: true });
+    fitTotem();
+
+    /***********************
+     * CANVAS + HELPERS
+     ***********************/
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    // Resolución lógica (mantén 1080x1920 para colisiones exactas)
+    const W = 1080, H = 1920;
+    canvas.width = W;
+    canvas.height = H;
+
+    const hudScore = document.getElementById("score");
+    const hudLives = document.getElementById("lives");
+    const hudLevel = document.getElementById("level");
+
+    const overlay = document.getElementById("overlay");
+    const titleEl = document.getElementById("title");
+    const subtitleEl = document.getElementById("subtitle");
+    const btnStart = document.getElementById("btnStart");
+    const btnRestart = document.getElementById("btnRestart");
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rand = (a, b) => a + Math.random() * (b - a);
+
+    /***********************
+     * FONDO "ESTRELLAS"
+     ***********************/
+    const stars = Array.from({ length: 140 }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: rand(1, 3),
+      s: rand(10, 40), // speed
+      a: rand(0.15, 0.8)
+    }));
+
+    function drawBackground(dt) {
+      // base
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#071a34");
+      g.addColorStop(0.55, "#06152b");
+      g.addColorStop(1, "#040a14");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      // stars drifting
+      ctx.save();
+      for (const st of stars) {
+        st.y += st.s * dt;
+        if (st.y > H + 10) { st.y = -10; st.x = Math.random() * W; }
+        ctx.globalAlpha = st.a;
+        ctx.fillStyle = "#bfefff";
+        ctx.beginPath();
+        ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // subtle waves
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = "#8fdcff";
+      ctx.lineWidth = 18;
+      for (let i = 0; i < 6; i++) {
+        const y = 300 + i * 230;
+        ctx.beginPath();
+        for (let x = -80; x <= W + 80; x += 80) {
+          ctx.quadraticCurveTo(x + 40, y + Math.sin((x + performance.now() * 0.02) * 0.01) * 22, x + 80, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /***********************
+     * BOTELLA (SIMPLIFICADA)
+     ***********************/
+    const bottle = {
+      w: 210,
+      h: 340,
+      x: W / 2,
+      y: H - 380,
+      targetX: W / 2,
+      speed: 1700 // px/seg para teclado
+    };
+
+    function drawBottle() {
+      const x = bottle.x - bottle.w / 2;
+      const y = bottle.y;
+      const w = bottle.w;
+      const h = bottle.h;
+
+      // shadow
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.ellipse(bottle.x, bottle.y + h + 22, w * 0.52, 30, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // body
+      const bodyGrad = ctx.createLinearGradient(0, y, 0, y + h);
+      bodyGrad.addColorStop(0, "#c9f4ff");
+      bodyGrad.addColorStop(0.55, "#71ddff");
+      bodyGrad.addColorStop(1, "#2bc3ff");
+
+      ctx.fillStyle = bodyGrad;
+      roundRect(x, y + 60, w, h - 60, 34, true, false);
+
+      // stripes
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#ffffff";
+      const stripeCount = 5;
+      for (let i = 0; i < stripeCount; i++) {
+        const sy = y + 90 + i * 50;
+        roundRect(x + 14, sy, w - 28, 34, 18, true, false);
+      }
+      ctx.restore();
+
+      // neck
+      ctx.fillStyle = "#c9f4ff";
+      roundRect(x + w * 0.30, y + 18, w * 0.40, 78, 20, true, false);
+
+      // cap
+      ctx.fillStyle = "#ff3b3b";
+      roundRect(x + w * 0.28, y, w * 0.44, 26, 8, true, false);
+      ctx.fillStyle = "#111";
+      roundRect(x + w * 0.26, y + 26, w * 0.48, 10, 6, true, false);
+
+      // highlights
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "#ffffff";
+      roundRect(x + 22, y + 95, 26, h - 140, 16, true, false);
+      ctx.restore();
+    }
+
+    function roundRect(x, y, w, h, r, fill, stroke) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+
+    /***********************
+     * GOTAS
+     ***********************/
+    const drops = [];
+    function spawnDrop(level) {
+      const r = rand(18, 28);
+      const speed = rand(520, 820) + (level - 1) * 65;
+      drops.push({
+        x: rand(60, W - 60),
+        y: -50,
+        r,
+        vy: speed
+      });
+    }
+
+    function drawDrop(d) {
+      // gota estilo "lágrima"
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      const grad = ctx.createLinearGradient(0, -d.r, 0, d.r * 1.4);
+      grad.addColorStop(0, "#e6fbff");
+      grad.addColorStop(0.55, "#86e3ff");
+      grad.addColorStop(1, "#2bc3ff");
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.moveTo(0, -d.r * 1.25);
+      ctx.quadraticCurveTo(d.r * 0.95, -d.r * 0.25, d.r * 0.75, d.r * 0.55);
+      ctx.quadraticCurveTo(0, d.r * 1.35, -d.r * 0.75, d.r * 0.55);
+      ctx.quadraticCurveTo(-d.r * 0.95, -d.r * 0.25, 0, -d.r * 1.25);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.ellipse(-d.r * 0.22, -d.r * 0.2, d.r * 0.18, d.r * 0.35, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function hitBottle(d) {
+      // zona de captura (boca de la botella)
+      const mouthY = bottle.y + 55;
+      const mouthW = bottle.w * 0.52;
+      const mouthH = 42;
+      const mouthX = bottle.x - mouthW / 2;
+
+      const dx = clamp(d.x, mouthX, mouthX + mouthW) - d.x;
+      const dy = clamp(d.y, mouthY, mouthY + mouthH) - d.y;
+      return (dx * dx + dy * dy) <= (d.r * d.r);
+    }
+
+    /***********************
+     * JUEGO
+     ***********************/
+    let running = false;
+    let lastT = 0;
+
+    let score = 0;
+    let lives = 3;
+    let level = 1;
+
+    let spawnTimer = 0;
+    let spawnEvery = 0.75; // seg
+
+    // input
+    let leftDown = false, rightDown = false;
+
+    function resetGame() {
+      drops.length = 0;
+      score = 0;
+      lives = 3;
+      level = 1;
+      spawnTimer = 0;
+      spawnEvery = 0.75;
+      bottle.x = W / 2;
+      bottle.targetX = W / 2;
+
+      hudScore.textContent = score;
+      hudLives.textContent = lives;
+      hudLevel.textContent = level;
+    }
+
+    function setOverlay(state, finalText = "") {
+      overlay.style.display = state ? "grid" : "none";
+      if (state) {
+        if (finalText) subtitleEl.textContent = finalText;
+      }
+    }
+
+    function startGame() {
+      resetGame();
+      running = true;
+      setOverlay(false);
+      lastT = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      running = false;
+      titleEl.textContent = "Fin del juego";
+      subtitleEl.textContent = `Puntaje final: ${score}`;
+      btnStart.style.display = "none";
+      btnRestart.style.display = "inline-block";
+      setOverlay(true);
+    }
+
+    function updateDifficulty() {
+      // sube nivel cada 12 puntos
+      const newLevel = 1 + Math.floor(score / 12);
+      if (newLevel !== level) {
+        level = newLevel;
+        hudLevel.textContent = level;
+        // más frecuencia de gotas, con límite
+        spawnEvery = Math.max(0.28, 0.75 - (level - 1) * 0.06);
+      }
+    }
+
+    function loop(t) {
+      if (!running) return;
+      const dt = Math.min(0.033, (t - lastT) / 1000); // cap 33ms
+      lastT = t;
+
+      // input teclado -> targetX
+      if (leftDown) bottle.targetX -= bottle.speed * dt;
+      if (rightDown) bottle.targetX += bottle.speed * dt;
+
+      bottle.targetX = clamp(bottle.targetX, bottle.w / 2 + 12, W - bottle.w / 2 - 12);
+
+      // easing para que se sienta suave
+      bottle.x += (bottle.targetX - bottle.x) * (1 - Math.pow(0.0001, dt));
+
+      // spawns
+      spawnTimer += dt;
+      while (spawnTimer >= spawnEvery) {
+        spawnTimer -= spawnEvery;
+        spawnDrop(level);
+        // ocasional extra en niveles altos
+        if (level >= 6 && Math.random() < 0.18) spawnDrop(level);
+      }
+
+      // update
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const d = drops[i];
+        d.y += d.vy * dt;
+
+        if (hitBottle(d)) {
+          drops.splice(i, 1);
+          score += 1;
+          hudScore.textContent = score;
+          updateDifficulty();
+          continue;
+        }
+
+        if (d.y > H + 60) {
+          drops.splice(i, 1);
+          lives -= 1;
+          hudLives.textContent = lives;
+          if (lives <= 0) {
+            gameOver();
+            return;
+          }
+        }
+      }
+
+      // draw
+      drawBackground(dt);
+      for (const d of drops) drawDrop(d);
+      drawBottle();
+
+      requestAnimationFrame(loop);
+    }
+
+    /***********************
+     * INPUT: TOUCH / MOUSE / KEYS
+     ***********************/
+    function getLocalX(clientX) {
+      // convertir el clientX a coordenada lógica (0..W) dentro del totem escalado
+      const rect = totem.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width; // 0..1
+      return clamp(x * W, 0, W);
+    }
+
+    // Touch + Mouse: mover hacia donde apuntas
+    function pointerMove(e) {
+      const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+      bottle.targetX = getLocalX(clientX);
+    }
+
+    totem.addEventListener("mousemove", (e) => { if (running) pointerMove(e); }, { passive: true });
+    totem.addEventListener("touchstart", (e) => { if (running) pointerMove(e); }, { passive: true });
+    totem.addEventListener("touchmove", (e) => { if (running) pointerMove(e); }, { passive: true });
+
+    // Teclado
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") leftDown = true;
+      if (e.key === "ArrowRight") rightDown = true;
+      if (e.key === " " && !running) startGame();
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft") leftDown = false;
+      if (e.key === "ArrowRight") rightDown = false;
+    });
+
+    /***********************
+     * BOTONES
+     ***********************/
+    btnStart.addEventListener("click", () => {
+      titleEl.textContent = "Atrapa las gotas";
+      subtitleEl.textContent = "Mueve la botella hacia los lados para atrapar las gotas.";
+      btnStart.style.display = "inline-block";
+      btnRestart.style.display = "none";
+      startGame();
+    });
+
+    btnRestart.addEventListener("click", () => {
+      titleEl.textContent = "Atrapa las gotas";
+      subtitleEl.textContent = "Mueve la botella hacia los lados para atrapar las gotas.";
+      btnStart.style.display = "inline-block";
+      btnRestart.style.display = "none";
+      startGame();
+    });
+
+    // Estado inicial
+    setOverlay(true);
+  </script>
+</body>
+</html>
