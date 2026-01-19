@@ -2,34 +2,20 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Gotas y Botella - TOTEM 9:16</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none; }
-    html, body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #000;
-    }
-    
-    /* contenedor real fullscreen */
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+    /* Contenedor centrado + escala para mantener 9:16 fijo (1080x1920) */
     #stage {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: calc(var(--vh) * 100);
-      display: flex;
-      justify-content: center;
-      align-items: top;
+      inset: 0;
+      display: grid;
+      place-items: center;
       background: #000;
     }
-
     #totem {
       position: relative;
       width: 1080px;
@@ -165,17 +151,6 @@
      * ESCALA 9:16 FIJO
      ***********************/
     const totem = document.getElementById("totem");
-
-    function fixMobileHeight() {
-    document.documentElement.style.setProperty(
-          "--vh",
-          window.innerHeight * 0.01 + "px"
-        );
-      }
-      window.addEventListener("resize", fixMobileHeight);
-      window.addEventListener("orientationchange", fixMobileHeight);
-      fixMobileHeight();
-    
     function fitTotem() {
       const sw = window.innerWidth;
       const sh = window.innerHeight;
@@ -340,16 +315,19 @@
      * GOTAS
      ***********************/
     const drops = [];
-    function spawnDrop(level) {
+    const BASE_DROP_SPEED = 720; // px por segundo (constante)
+
+   function spawnDrop(level) {
       const r = rand(18, 28);
-      const speed = rand(520, 820) + (level - 1) * 65;
+
       drops.push({
         x: rand(60, W - 60),
         y: -50,
         r,
-        vy: speed
+        vy: BASE_DROP_SPEED + (level - 1) * 60
       });
     }
+
 
     function drawDrop(d) {
       // gota estilo "lágrima"
@@ -457,7 +435,12 @@
 
     function loop(t) {
       if (!running) return;
-      const dt = Math.min(0.033, (t - lastT) / 1000); // cap 33ms
+      let rawDt = (t - lastT) / 1000;
+      lastT = t;
+
+      /* clamp fuerte para móviles */
+      const dt = Math.max(0.016, Math.min(rawDt, 0.02));
+
       lastT = t;
 
       // input teclado -> targetX
@@ -565,7 +548,3 @@
   </script>
 </body>
 </html>
-
-
-
-
