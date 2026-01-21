@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width,height=device-height,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
+  <title>Gotas y Bidón - 170 Litros</title>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    :root{
+        --vh: 1vh;
+        --bottom-bar-h: 280px; /* ⬅️ altura de la barra inferior */
+    }
+
+
+    /* Fullscreen real + centrado estable */
+    #stage{
+      position:fixed; inset:0;
+      width:100vw; height:calc(var(--vh) * 100);
+      display:flex; justify-content:center; align-items:center;
+      background:#000;
+      overflow:hidden;
+    }
+
+    /* Totem lógico 1080x1920 (9:16) */
+    #totem{
+      position:relative;
+      width:1080px; height:1920px;
+      transform-origin:center center;
+      background: radial-gradient(circle at 30% 20%, #0b2a55 0%, #06162f 40%, #030a14 100%);
+      overflow:hidden;
+      border:6px solid rgba(255,255,255,.08);
+      border-radius:14px;
+    }
+
+    canvas{
+        position:absolute;
+        top:0;
+        left:0;
+        width:100%;
+        height: calc(100% - var(--bottom-bar-h) - 20px); /* ⬅️ espacio reservado */
+        display:block;
+    }
+
+
+    /* Barra inferior */
+    #bottomBar{
+        position:absolute;
+        left:20px;
+        right:20px;
+        bottom:20px;
+        height: var(--bottom-bar-h); /* ⬅️ altura fija */
+        z-index:6;
+
+        display:flex;
+        gap:14px;
+        align-items:stretch;
+        pointer-events:none;
+    }
+
+
+    .card{
+      background: rgba(0, 40, 70, .35);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px;
+      padding: 14px 16px;
+      color: #e9faff;
+      backdrop-filter: blur(6px);
+      text-shadow: 0 2px 10px rgba(0,0,0,.5);
+      font-weight: 500;
+    }
+
+    /* Total */
+    #totalCard{ width: 280px; display:flex; flex-direction:column; justify-content:center; }
+    #litersTitle{ font-size:22px; font-weight:800; letter-spacing:.2px; display:flex; justify-content:space-between; }
+    #goalSmall{ font-size:16px; opacity:.9; font-weight:900; }
+    #litersBig{ font-size:44px; font-weight:1000; line-height:1; margin-top:6px; }
+
+    /* Progreso horizontal */
+    #progressCard{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:10px; }
+    #barOuter{
+      position:relative;
+      width:100%;
+      height:34px;
+      border-radius:999px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      overflow:hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
+    }
+    #barFill{
+      position:absolute; left:0; top:0;
+      height:100%; width:0%;
+      background: linear-gradient(90deg, #9ff3ff 0%, #3ed3ff 100%);
+    }
+    #progressText{
+      display:flex; justify-content:space-between; align-items:baseline;
+      font-weight:900;
+      opacity:.95;
+      font-size:18px;
+    }
+
+    /* Leyenda */
+    #legendCard{ width: 360px; display:flex; flex-direction:column; justify-content:center; }
+    #legend{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:14px;
+      font-size:19px;
+      font-weight:500;
+    }
+    .lgItem{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .lgLeft{ display:inline-flex; align-items:center; gap:10px; min-width: 0; }
+    .dot{
+      width:16px; height:16px; border-radius:999px;
+      border:2px solid rgba(255,255,255,.65);
+      box-shadow:0 0 14px rgba(0,0,0,.35);
+      flex:0 0 auto;
+    }
+    .lbl{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 150px;
+      opacity:.96;
+    }
+    .val{ opacity:.95; }
+
+    /* Overlay inicio / fin */
+    #overlay{
+      position:absolute; inset:0;
+      z-index:10;
+      display:grid; place-items:center;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(3px);
+    }
+    #panel{
+      width:min(980px, 94%);
+      padding:34px;
+      border-radius:28px;
+      background: rgba(5, 25, 45, .78);
+      border: 1px solid rgba(255,255,255,.14);
+      color:#e9faff;
+      text-align:center;
+      box-shadow:0 18px 60px rgba(0,0,0,.5);
+    }
+    #panel h1{ font-size:64px; margin:8px 0 14px; line-height:1.05; font-weight:700; }
+    #panel p{ font-size:38px; opacity:.92; margin:0 0 18px; font-weight:400; }
+
+    /* Imagen previa */
+    #startImg{
+      width:100%;
+      max-height: 980px;
+      object-fit: contain;
+      border-radius:18px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      margin-bottom:18px;
+    }
+
+    /* Resumen */
+    #summary{
+      margin-top: 14px;
+      text-align: left;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      padding: 18px;
+      max-height: 520px;
+      overflow: auto;
+    }
+    #summaryTitle{
+      font-size: 30px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      opacity: .98;
+    }
+    .sumRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(255,255,255,.10);
+      font-weight: 600;
+      font-size: 20px;
+    }
+    .sumLeft{ display:flex; align-items:center; gap:12px; min-width: 0; }
+    .sumName{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sumRight{ opacity:.95; }
+
+    #panel .row{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+    button{
+      appearance:none; border:0; cursor:pointer;
+      border-radius:18px; padding:18px 26px;
+      font-size:34px; font-weight:1000;
+      color:#002238;
+      background: linear-gradient(180deg, #9ff3ff 0%, #3ed3ff 100%);
+      box-shadow:0 10px 30px rgba(0, 160, 255, .25);
+    }
+    button:active{ transform: translateY(1px); }
+    .small{ font-size:22px; opacity:.9; margin-top:10px; font-weight:700; }
+  </style>
+</head>
+
+<body>
+  <div id="stage">
+    <div id="totem">
+      <canvas id="game"></canvas>
+
+      <!-- Barra inferior translúcida -->
+      <div id="bottomBar">
+        <div class="card" id="totalCard">
+          <div id="litersTitle">
+            <span>Litros</span>
+            <span id="goalSmall">Meta 170</span>
+          </div>
+          <div id="litersBig"><span id="liters">0</span> L</div>
+        </div>
+
+        <div class="card" id="progressCard">
+          <div id="progressText">
+            <span id="progressLabel">Progreso</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div id="barOuter"><div id="barFill"></div></div>
+        </div>
+
+        <div class="card" id="legendCard">
+          <div id="legend"></div>
+        </div>
+      </div>
+
+      <!-- Overlay inicio/fin -->
+      <div id="overlay">
+        <div id="panel">
+          <!-- Pon esta imagen en la misma carpeta del HTML -->
+          <img id="startImg" src="Gotas_INICIO.jpeg" alt="Instrucciones" />
+          <h1 id="title">Atrapa las gotas</h1>
+          <p id="subtitle">Llega a 170 litros atrapando gotas en el bidón.</p>
+
+          <div id="summary" style="display:none;">
+            <div id="summaryTitle">Resumen de consumo por tipo</div>
+            <div id="summaryBody"></div>
+          </div>
+
+          <div class="row">
+            <button id="btnStart">Iniciar</button>
+            <button id="btnRestart" style="display:none;">Reiniciar</button>
+          </div>
+          <div class="small" id="hint">En tótem: desliza. En PC: mouse o flechas ⬅➡.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /************ Fullscreen móvil (vh real) ************/
+    function fixMobileHeight() {
+      document.documentElement.style.setProperty("--vh", (window.innerHeight * 0.01) + "px");
+    }
+    window.addEventListener("resize", fixMobileHeight, { passive: true });
+    window.addEventListener("orientationchange", fixMobileHeight, { passive: true });
+    fixMobileHeight();
+
+    /************ Escala: SOLO por alto (evita que se corte) ************/
+    const totem = document.getElementById("totem");
+    function fitTotem() {
+      const scale = window.innerHeight / 1920; // SOLO alto
+      totem.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener("resize", fitTotem, { passive: true });
+    window.addEventListener("orientationchange", fitTotem, { passive: true });
+    fitTotem();
+
+    /************ Canvas ************/
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const W = 1080, H = 1920;
+    canvas.width = W; canvas.height = H;
+
+    const overlay = document.getElementById("overlay");
+    const titleEl = document.getElementById("title");
+    const subtitleEl = document.getElementById("subtitle");
+    const btnStart = document.getElementById("btnStart");
+    const btnRestart = document.getElementById("btnRestart");
+
+    const litersEl = document.getElementById("liters");
+    const barFill = document.getElementById("barFill");
+    const progressPct = document.getElementById("progressPct");
+    const legend = document.getElementById("legend");
+
+    const startImg = document.getElementById("startImg");
+    const summaryBox = document.getElementById("summary");
+    const summaryBody = document.getElementById("summaryBody");
+
+    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+    const rand  = (a,b)=>a+Math.random()*(b-a);
+
+    /************ Config colores + litros + NOMBRES (según pedido) ************/
+    const GOAL_LITERS = 170;
+
+    // Nombres:
+    // red = Llave Abierta
+    // yellow = Ducha
+    // green = Lavado de platos
+    // cyan = Lavamanos
+    // blue = Uso de WC
+    // magenta = Lavado de ropa
+    // orange = Beber y cocinar
+    const DROP_TYPES = [
+      { key:"red",     name:"Llave Abierta",    hex:"#FF0000", liters:12, weight:0.18 },
+      { key:"yellow",  name:"Ducha",            hex:"#FFFF00", liters:60, weight:0.06 },
+      { key:"green",   name:"Lavado de platos", hex:"#00FF00", liters:15, weight:0.16 },
+      { key:"cyan",    name:"Lavamanos",        hex:"#00FFFF", liters:10, weight:0.20 },
+      { key:"blue",    name:"Uso de WC",        hex:"#0000FF", liters:25, weight:0.12 },
+      { key:"magenta", name:"Lavado de ropa",   hex:"#FF00FF", liters:50, weight:0.07 },
+      { key:"orange",  name:"Beber y cocinar",  hex:"#F15A24", liters: 5, weight:0.21 },
+    ];
+
+    // Leyenda (2 columnas)
+    legend.innerHTML = DROP_TYPES.map(t => `
+      <div class="lgItem">
+        <div class="lgLeft">
+          <span class="dot" style="background:${t.hex}"></span>
+          <span class="lbl">${t.name}</span>
+        </div>
+        <span class="val">+${t.liters}L</span>
+      </div>
+    `).join("");
+
+    function pickType() {
+      const sum = DROP_TYPES.reduce((a,t)=>a+t.weight,0);
+      let r = Math.random() * sum;
+      for (const t of DROP_TYPES) { r -= t.weight; if (r <= 0) return t; }
+      return DROP_TYPES[DROP_TYPES.length - 1];
+    }
+
+    /************ Fondo ************/
+    const stars = Array.from({ length: 140 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: rand(1, 3), s: rand(10, 40), a: rand(0.15, 0.8)
+    }));
+
+    function drawBackground(dt) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#071a34");
+      g.addColorStop(0.55, "#06152b");
+      g.addColorStop(1, "#040a14");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.save();
+      for (const st of stars) {
+        st.y += st.s * dt;
+        if (st.y > H + 10) { st.y = -10; st.x = Math.random() * W; }
+        ctx.globalAlpha = st.a;
+        ctx.fillStyle = "#bfefff";
+        ctx.beginPath();
+        ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    /************ Bidón ************/
+    const bottle = { w: 210, h: 340, x: W/2, y: H - 380, targetX: W/2, speed: 1700 };
+
+    function roundRect(x, y, w, h, r, fill) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+      if (fill) ctx.fill();
+    }
+
+    function drawBottle() {
+      const x = bottle.x - bottle.w / 2;
+      const y = bottle.y;
+      const w = bottle.w;
+      const h = bottle.h;
+
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.ellipse(bottle.x, bottle.y + h + 22, w * 0.52, 30, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      const bodyGrad = ctx.createLinearGradient(0, y, 0, y + h);
+      bodyGrad.addColorStop(0, "#c9f4ff");
+      bodyGrad.addColorStop(0.55, "#71ddff");
+      bodyGrad.addColorStop(1, "#2bc3ff");
+
+      ctx.fillStyle = bodyGrad;
+      roundRect(x, y + 60, w, h - 60, 34, true);
+
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 5; i++) {
+        const sy = y + 90 + i * 50;
+        roundRect(x + 14, sy, w - 28, 34, 18, true);
+      }
+      ctx.restore();
+
+      ctx.fillStyle = "#c9f4ff";
+      roundRect(x + w * 0.30, y + 18, w * 0.40, 78, 20, true);
+
+      ctx.fillStyle = "#ff3b3b";
+      roundRect(x + w * 0.28, y, w * 0.44, 26, 8, true);
+      ctx.fillStyle = "#111";
+      roundRect(x + w * 0.26, y + 26, w * 0.48, 10, 6, true);
+
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "#ffffff";
+      roundRect(x + 22, y + 95, 26, h - 140, 16, true);
+      ctx.restore();
+    }
+
+    /************ Gotas ************/
+    const drops = [];
+    const BASE_DROP_SPEED = 720;  // velocidad consistente
+
+    function spawnDrop() {
+      const t = pickType();
+      const rad =
+        (t.liters >= 50) ? rand(24, 32) :
+        (t.liters >= 25) ? rand(22, 30) :
+        rand(18, 28);
+
+      drops.push({
+        type: t,
+        x: rand(60, W - 60),
+        y: -70,
+        r: rad,
+        vy: BASE_DROP_SPEED
+      });
+    }
+
+    function drawDrop(d) {
+      const hex = d.type.hex;
+
+      ctx.save();
+      ctx.translate(d.x, d.y);
+
+      // gota con "borde negro" como referencia
+      const grad = ctx.createLinearGradient(0, -d.r, 0, d.r * 1.4);
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(0.22, hex);
+      grad.addColorStop(1, hex);
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(0, -d.r * 1.25);
+      ctx.quadraticCurveTo(d.r * 0.95, -d.r * 0.25, d.r * 0.75, d.r * 0.55);
+      ctx.quadraticCurveTo(0, d.r * 1.35, -d.r * 0.75, d.r * 0.55);
+      ctx.quadraticCurveTo(-d.r * 0.95, -d.r * 0.25, 0, -d.r * 1.25);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "rgba(0,0,0,.85)";
+      ctx.stroke();
+
+      // texto litros (valor)
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = "rgba(0,0,0,.55)";
+      ctx.font = "1000 22px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${d.type.liters}`, 0, d.r * 0.55);
+
+      ctx.restore();
+    }
+
+    function hitBottle(d) {
+      const mouthY = bottle.y + 55;
+      const mouthW = bottle.w * 0.52;
+      const mouthH = 42;
+      const mouthX = bottle.x - mouthW / 2;
+
+      const dx = clamp(d.x, mouthX, mouthX + mouthW) - d.x;
+      const dy = clamp(d.y, mouthY, mouthY + mouthH) - d.y;
+      return (dx*dx + dy*dy) <= (d.r*d.r);
+    }
+
+    /************ Estado / UI ************/
+    let liters = 0;
+
+    // stats por tipo atrapado
+    let stats = null;
+    function initStats() {
+      stats = {};
+      for (const t of DROP_TYPES) {
+        stats[t.key] = { count: 0, liters: 0, type: t };
+      }
+    }
+
+    function updateUI() {
+      litersEl.textContent = liters;
+      const pct = clamp((liters / GOAL_LITERS) * 100, 0, 100);
+      barFill.style.width = pct.toFixed(2) + "%";
+      progressPct.textContent = Math.round(pct) + "%";
+    }
+
+    function buildSummaryHTML() {
+      // Ordenado por litros aportados (desc)
+      const rows = Object.values(stats).slice().sort((a,b)=>b.liters - a.liters);
+
+      return rows.map(s => `
+        <div class="sumRow">
+          <div class="sumLeft">
+            <span class="dot" style="background:${s.type.hex}"></span>
+            <span class="sumName">${s.type.name}</span>
+          </div>
+          <div class="sumRight">
+            ${s.count} gotas · ${s.liters} L
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /************ Juego ************/
+    let running = false;
+    let lastT = 0;
+    let spawnTimer = 0;
+    let spawnEvery = 0.70; // frecuencia fija
+
+    let leftDown = false, rightDown = false;
+
+    function setOverlay(state) { overlay.style.display = state ? "grid" : "none"; }
+
+    function resetGame() {
+      drops.length = 0;
+      liters = 0;
+      spawnTimer = 0;
+      bottle.x = W/2;
+      bottle.targetX = W/2;
+
+      initStats();
+      updateUI();
+
+      // modo inicio
+      startImg.style.display = "block";
+      summaryBox.style.display = "none";
+      btnStart.style.display = "inline-block";
+      btnRestart.style.display = "none";
+      titleEl.textContent = "Atrapa las gotas";
+      subtitleEl.textContent = "Llega a 170 litros atrapando gotas en el bidón.";
+    }
+
+    function startGame() {
+      resetGame();
+      running = true;
+      setOverlay(false);
+      lastT = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function finishGame() {
+      running = false;
+
+      // UI fin
+      startImg.style.display = "none";           // no mostrar imagen inicial
+      summaryBox.style.display = "block";        // mostrar resumen
+      summaryBody.innerHTML = buildSummaryHTML();
+
+      titleEl.textContent = "¡Meta lograda!";
+      subtitleEl.textContent = `Recolectaste ${liters} litros.`;
+
+      btnStart.style.display = "none";
+      btnRestart.style.display = "inline-block";
+      setOverlay(true);
+    }
+
+    function loop(t) {
+      if (!running) return;
+
+      const rawDt = (t - lastT) / 1000;
+      lastT = t;
+      const dt = Math.max(0.016, Math.min(rawDt, 0.02)); // velocidad estable
+
+      // input teclado
+      if (leftDown)  bottle.targetX -= bottle.speed * dt;
+      if (rightDown) bottle.targetX += bottle.speed * dt;
+
+      bottle.targetX = clamp(bottle.targetX, bottle.w/2 + 12, W - bottle.w/2 - 12);
+      bottle.x += (bottle.targetX - bottle.x) * (1 - Math.pow(0.0001, dt));
+
+      // spawn
+      spawnTimer += dt;
+      while (spawnTimer >= spawnEvery) {
+        spawnTimer -= spawnEvery;
+        spawnDrop();
+      }
+
+      // update drops
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const d = drops[i];
+        d.y += d.vy * dt;
+
+        if (hitBottle(d)) {
+          drops.splice(i, 1);
+
+          // sumar litros + stats
+          liters = Math.min(GOAL_LITERS, liters + d.type.liters);
+          const s = stats[d.type.key];
+          s.count += 1;
+          s.liters += d.type.liters;
+
+          updateUI();
+          if (liters >= GOAL_LITERS) { finishGame(); return; }
+          continue;
+        }
+
+        const GAME_BOTTOM = H - 220; // mismo valor que --bottom-bar-h
+
+        if (d.y > GAME_BOTTOM + 80) {
+        drops.splice(i, 1);
+        }
+        bottle.y = GAME_BOTTOM - 360;
+
+      }
+
+      // draw
+      drawBackground(dt);
+      for (const d of drops) drawDrop(d);
+      drawBottle();
+
+      requestAnimationFrame(loop);
+    }
+
+    /************ Input touch/mouse ************/
+    function getLocalX(clientX) {
+      const rect = totem.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width;
+      return clamp(x * W, 0, W);
+    }
+    function pointerMove(e) {
+      const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+      bottle.targetX = getLocalX(clientX);
+    }
+    totem.addEventListener("mousemove", (e) => { if (running) pointerMove(e); }, { passive: true });
+    totem.addEventListener("touchstart", (e) => { if (running) pointerMove(e); }, { passive: true });
+    totem.addEventListener("touchmove",  (e) => { if (running) pointerMove(e); }, { passive: true });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") leftDown = true;
+      if (e.key === "ArrowRight") rightDown = true;
+      if (e.key === " " && !running) startGame();
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft") leftDown = false;
+      if (e.key === "ArrowRight") rightDown = false;
+    });
+
+    /************ Botones ************/
+    btnStart.addEventListener("click", startGame);
+    btnRestart.addEventListener("click", startGame);
+
+    // Estado inicial
+    initStats();
+    updateUI();
+    setOverlay(true);
+  </script>
+</body>
+</html>
