@@ -540,23 +540,26 @@
     function setOverlay(state) { overlay.style.display = state ? "grid" : "none"; }
 
     function resetGame() {
-      drops.length = 0;
-      liters = 0;
-      spawnTimer = 0;
-      bottle.x = W/2;
-      bottle.targetX = W/2;
+        drops.length = 0;
+        liters = 0;
+        spawnTimer = 0;
 
-      initStats();
-      updateUI();
+        bottle.x = W / 2;
+        bottle.targetX = W / 2;
 
-      // modo inicio
-      startImg.style.display = "block";
-      summaryBox.style.display = "none";
-      btnStart.style.display = "inline-block";
-      btnRestart.style.display = "none";
-      titleEl.textContent = "Atrapa las gotas";
-      subtitleEl.textContent = "Llega a 170 litros atrapando gotas en el bidón.";
+        initStats();
+        updateUI();
+
+        /* ⬇️ ESTO ES LO IMPORTANTE */
+        startImg.style.display = "block";    // volver a mostrar imagen inicial
+        summaryBox.style.display = "none";   // ocultar resumen
+        titleEl.textContent = "Atrapa las gotas";
+        subtitleEl.textContent = "Llega a 170 litros atrapando gotas en el bidón.";
+
+        btnStart.style.display = "inline-block";
+        btnRestart.style.display = "none";
     }
+
 
     function startGame() {
       resetGame();
@@ -665,7 +668,11 @@
 
     /************ Botones ************/
     btnStart.addEventListener("click", startGame);
-    btnRestart.addEventListener("click", startGame);
+    btnRestart.addEventListener("click", () => {
+        running = false;          // detener juego
+        resetGame();              // volver a estado inicial
+        setOverlay(true);         // mostrar overlay con imagen
+    });
 
     // Estado inicial
     initStats();
@@ -674,4 +681,3 @@
   </script>
 </body>
 </html>
-
